@@ -261,9 +261,7 @@ class Traffic:
             case _:
                 print("Unknown output type! Please rerun program!")
 
-# start_time = time.time()
 test = Traffic()
 test.circ = 800
 test.multicar(car_count=30, graph_type=0, pos_type='e', vel_type='0', output='gif')
 # test.singlecar(pos_init=0, vel_init=30, time_limit=150)
-# print(f"{time.time() - start_time:-^20}")
