@@ -15,19 +15,22 @@ class Traffic:
         https://www.mtreiber.de/trafficSimulationDe_html5/index.html
     """
     
-    def __init__(cls):
-        cls.vel_0 = 28 # Init velocity (m/s)
-        cls.safe_time = 1.8 # Safe time (s)
-        cls.min_gap = 2 # Minimum bumper-to-bumper gap (m)
-        cls.accelconst = 0.3 # Acceleration constant (m/s^2)
-        cls.decel = 3 # Deceleration constant (m/s^2)
-        cls.veh_len = 5 # Vehicle length (m)
-        cls.delta = 4 # Accerlation delta (None)
-        cls.circ = 1000 # Road circumference (m)
-        cls.radius = cls.circ/(2*np.pi)
-        cls._randmod = np.random.randint(low=1, high=10) # Randomizer modifier
+    def __init__(self):
+        self.vel_0 = 28 # Init velocity (m/s)
+        self.safe_time = 1.8 # Safe time (s)
+        self.min_gap = 2 # Minimum bumper-to-bumper gap (m)
+        self.accelconst = 0.3 # Acceleration constant (m/s^2)
+        self.decel = 3 # Deceleration constant (m/s^2)
+        self.veh_len = 5 # Vehicle length (m)
+        self.delta = 4 # Accerlation delta (None)
+        self.circ = 1000 # Road circumference (m)
+        self._randmod = np.random.randint(low=1, high=10) # Randomizer modifier
+        
+    @property
+    def radius(self):
+        return self.circ/(2*np.pi)
 
-    def _dyndistance(cls, velnext : float, velcurr : float) -> float:
+    def _dyndistance(self, velnext : float, velcurr : float) -> float:
         """ Calculates the dynamic distance variable.
 
         Args:
@@ -37,11 +40,11 @@ class Traffic:
         Returns:
             float: The calculated dynamic distance
         """
-        dyndist = cls.min_gap + velcurr*cls.safe_time + \
-                    ((velcurr - velnext)/(2*np.sqrt(cls.accelconst*cls.decel)))
+        dyndist = self.min_gap + velcurr*self.safe_time + \
+                    (velcurr*(velcurr - velnext)/(2*np.sqrt(self.accelconst*self.decel)))
         return dyndist
 
-    def _bumpergap(cls, posnext : float, poscurr : float, count : int) -> float:
+    def _bumpergap(self, posnext : float, poscurr : float, count : int) -> float:
         """ Calculates the bumper-to-bumper gap between each car.
 
         Args:
@@ -52,17 +55,17 @@ class Traffic:
             float: The calculated bumper-to-bumper gap between cars
         """
         if count == 0:
-            gaparr = cls.circ + posnext - poscurr - cls.veh_len
+            gaparr = self.circ + posnext - poscurr - self.veh_len
         else:
-            gaparr = posnext - poscurr - cls.veh_len
+            gaparr = posnext - poscurr - self.veh_len
         
         # Checks if the calculated bumper gap is 0
         # if so adds the randomizer modifier to it
         if np.round(gaparr,3) == 0:
-            gaparr += cls._randmod
+            gaparr += self._randmod
         return gaparr
 
-    def singlecar(cls, pos_init : float, vel_init : float, time_limit = 900):
+    def singlecar(self, pos_init : float, vel_init : float, time_limit = 900):
         """ IDM traffic model for a single car. Outputs a line graph
             of the position and velocity of the car vs time.
 
@@ -81,7 +84,7 @@ class Traffic:
             dx = vel
             
             # Calculates the velocity derivative
-            dv = cls.accelconst*(1 - (vel/cls.vel_0)**cls.delta)
+            dv = self.accelconst*(1 - (vel/self.vel_0)**self.delta)
             
             # Creates an array of the derivates
             rate = np.array([dx, dv])
@@ -112,8 +115,8 @@ class Traffic:
         plt.legend()
         plt.show()
         
-    def multicar(cls, car_count : int, graph_type : int, output : str, frames_count = 90,
-                 time_limit = 900, pos_type = 'e', vel_type = '0'):
+    def multicar(self, car_count : int, graph_type : int, output : str, frames_count = 90,
+                 time_limit = 900, pos_type = 'e', vel_type = '0', fps = 30, step = 10):
         """ IDM traffic model for multiple cars. Outputs a graph--either
             a straight line or circle, depending on the value passed into
             graph_type.
@@ -129,11 +132,11 @@ class Traffic:
         # added as well.
         match pos_type.lower():
             case 'e' | 'even': 
-                pos_init = np.arange(car_count, 0, -1) * (cls.min_gap + cls.veh_len)
+                pos_init = np.arange(car_count, 0, -1) * (self.min_gap + self.veh_len)
             case 'r' | 'random' | 'rand':
                 pos_init = np.empty(car_count)
                 for i in range(car_count):
-                    pos_init[i] = np.round((np.random.randint(low=1, high=cls.circ) + cls.min_gap + cls.veh_len), decimals=3)
+                    pos_init[i] = np.round((np.random.randint(low=1, high=self.circ) + self.min_gap + self.veh_len), decimals=3)
                     if pos_init[i] == pos_init[i-1]:
                         pos_init[i] += np.random.randint(low=1, high=10)
         
@@ -146,9 +149,9 @@ class Traffic:
                 vel_init = np.random.randint(low=10, high=30, size=car_count)
         
         # Dictionary to be used in the generation of the animation gifs
-        cls._graph_dict = dict.fromkeys(['r', 'rand', 'random'], 'Random')
-        cls._graph_dict.update(dict.fromkeys(['0','z','zeros'], 'Zeros'))
-        cls._graph_dict.update(dict.fromkeys(['e','even'], 'Even'))
+        self._graph_dict = dict.fromkeys(['r', 'rand', 'random'], 'Random')
+        self._graph_dict.update(dict.fromkeys(['0','z','zeros'], 'Zeros'))
+        self._graph_dict.update(dict.fromkeys(['e','even'], 'Even'))
         
         def multicalcs(datarr, time):
             # Sets the position and velocity arrays according to the number
@@ -161,12 +164,12 @@ class Traffic:
             for i in range(car_count):
                 if i == 0:
                     # Calculates the decel parameter for the first car
-                    decelparam = cls._dyndistance(velcurr=vel[i], velnext=vel[i-1])\
-                                /cls._bumpergap(poscurr=pos[i], posnext=pos[-1], count = i)
+                    decelparam = self._dyndistance(velcurr=vel[i], velnext=vel[i-1])\
+                                /self._bumpergap(poscurr=pos[i], posnext=pos[-1], count = i)
                 else:
                     # Calculates the decel parameters for every other car
-                    decelparam = cls._dyndistance(velcurr=vel[i], velnext=vel[i-1])\
-                                /cls._bumpergap(poscurr=pos[i], posnext=pos[i-1], count = i)
+                    decelparam = self._dyndistance(velcurr=vel[i], velnext=vel[i-1])\
+                                /self._bumpergap(poscurr=pos[i], posnext=pos[i-1], count = i)
                     
                     ### Something about this calculation is causing issues with any circumference
                     # other than 1000m. At 100m the first car completely bypasses the last car at
@@ -178,7 +181,7 @@ class Traffic:
                 dx = vel
                 
                 # Calculates the velocity derivative for every car
-                dv[i] = cls.accelconst*(1 - (vel[i]/cls.vel_0)**cls.delta - (decelparam)**2)
+                dv[i] = self.accelconst*(1 - (vel[i]/self.vel_0)**self.delta - (decelparam)**2)
                 
             rate = np.concatenate((dx, dv))
             
@@ -208,7 +211,7 @@ class Traffic:
         
         # Animation function for a flat line of points
         def AnimPlot(i):
-            xarr = car_pos[i*10][:car_count] % 1000
+            xarr = car_pos[i*step][:car_count] % self.circ
             yarr = np.ones(car_count)
             
             plt.cla()
@@ -217,13 +220,13 @@ class Traffic:
             # Changes the first and last car points to different colors
             ax.plot(xarr[:1], yarr[:1], marker = '*', color = 'magenta', linestyle = '', markersize = 10)
             ax.plot(xarr[-1:], yarr[-1:], marker = '*', color = 'lime', linestyle = '', markersize = 10)
-            plt.xlim(0,1000)
+            plt.xlim(0,self.circ)
         
         # Animation function for a circle of points
         def CircleAnim(i):
-            theta = car_pos[i*10][:car_count]/(1000*2*np.pi)
-            xarr = cls.radius*np.cos(theta)
-            yarr = cls.radius*np.sin(theta)
+            theta = car_pos[i*step][:car_count]*(2*np.pi/self.circ)
+            xarr = self.radius*np.cos(theta)
+            yarr = self.radius*np.sin(theta)
             
             ax.set_aspect('equal', adjustable = 'box')
             plt.cla()
@@ -232,7 +235,7 @@ class Traffic:
             # Changes the first and last car points to different colors
             ax.plot(xarr[:1], yarr[:1], marker = '*', color = 'magenta', linestyle = '', markersize = 10)
             ax.plot(xarr[-1:], yarr[-1:], marker = '*', color = 'lime', linestyle = '', markersize = 10)
-            plt.axis([-cls.radius*1.1, cls.radius*1.1, -cls.radius*1.1, cls.radius*1.1])
+            plt.axis([-self.radius*1.1, self.radius*1.1, -self.radius*1.1, self.radius*1.1])
         
         # Generates and saves a graph as a gif. Graph depends on the
         # value passed into graph_type
@@ -244,24 +247,26 @@ class Traffic:
                 match graph_type:
                     case 0:
                         animation = anim.FuncAnimation(fig, CircleAnim, frames = frames_count)
-                        circ_gif_name = (f'Circle{cls.circ}Circu{cls._graph_dict[pos_type.lower()]}'
-                                        +f'Pos{cls._graph_dict[vel_type.lower()]}Vel.gif')
-                        writer = anim.PillowWriter(fps = 30, bitrate = 1000)
+                        circ_gif_name = (f'Circle{self.circ}Circu{self._graph_dict[pos_type.lower()]}'
+                                        +f'Pos{self._graph_dict[vel_type.lower()]}Vel.gif')
+                        writer = anim.PillowWriter(fps = fps, bitrate = 1000)
                         animation.save(circ_gif_name, writer=writer)
                         print(circ_gif_name, "saved to", dir_path)
                         plt.show()
                     case 1:
                         animation = anim.FuncAnimation(fig, AnimPlot, frames = frames_count)
-                        flat_gif_name = (f'Flat{cls.circ}Circu{cls._graph_dict[pos_type.lower()]}'
-                                        +f'Pos{cls._graph_dict[vel_type.lower()]}Vel.gif')
-                        writer = anim.PillowWriter(fps = 30, bitrate = 1000)
+                        flat_gif_name = (f'Flat{self.circ}Circu{self._graph_dict[pos_type.lower()]}'
+                                        +f'Pos{self._graph_dict[vel_type.lower()]}Vel.gif')
+                        writer = anim.PillowWriter(fps = fps, bitrate = 1000)
                         animation.save(flat_gif_name, writer=writer)
                         print(flat_gif_name, "saved to", dir_path)
                         plt.show()                 
             case _:
                 print("Unknown output type! Please rerun program!")
 
-test = Traffic()
-test.circ = 800
-test.multicar(car_count=30, graph_type=0, pos_type='e', vel_type='0', output='gif')
-# test.singlecar(pos_init=0, vel_init=30, time_limit=150)
+if __name__ == "__main__":
+    test = Traffic()
+    test.circ = 800
+    test.multicar(car_count=30, graph_type=0, pos_type='e', vel_type='0',
+                  output='gif', frames_count = 180, fps = 10, step = 5)
+    # test.singlecar(pos_init=0, vel_init=30, time_limit=150)
