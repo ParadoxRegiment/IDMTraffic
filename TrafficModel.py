@@ -16,6 +16,7 @@ def get_args():
     parser.add_argument('-tl','--time_limit', type=int, default=900, help='Time limit for the simulation in seconds')
     parser.add_argument('-fps','--fps', type=int, default=30, help='Frames per second for the animation')
     parser.add_argument('-step','--step', type=int, default=10, help='Step size for the animation frames')
+    parser.add_argument('--show', action='store_true', help='Show the plot after simulation')
 
     return parser.parse_args()
 
@@ -281,6 +282,9 @@ def main(args=None):
         fps=args.fps,
         step=args.step
     )
+    
+    if args.show:
+        plt.show()
 
 if __name__ == "__main__":
     main()
