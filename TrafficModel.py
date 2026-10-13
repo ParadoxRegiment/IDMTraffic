@@ -3,6 +3,21 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as anim
 from scipy.integrate import odeint, solve_ivp
 import pathlib
+import argparse
+
+def get_args():
+    parser = argparse.ArgumentParser(description="IDM Traffic Model Simulation")
+    parser.add_argument('-cc','--car_count', type=int, default=30, help='Number of cars in the simulation')
+    parser.add_argument('-gt','--graph_type', type=int, choices=[0, 1], default=0, help='Type of graph: 0 for circle, 1 for flat')
+    parser.add_argument('-pt','--pos_type', type=str, choices=['e', 'even', 'r', 'random', 'rand'], default='e', help='Initial position type')
+    parser.add_argument('-vt','--vel_type', type=str, choices=['0', 'z', 'zeros', 'r', 'random', 'rand'], default='0', help='Initial velocity type')
+    parser.add_argument('-o','--output', type=str, choices=['p', 'plot', 'g', 'gif'], default='gif', help='Output type: plot or gif')
+    parser.add_argument('-fc','--frames_count', type=int, default=90, help='Number of frames in the animation')
+    parser.add_argument('-tl','--time_limit', type=int, default=900, help='Time limit for the simulation in seconds')
+    parser.add_argument('-fps','--fps', type=int, default=30, help='Frames per second for the animation')
+    parser.add_argument('-step','--step', type=int, default=10, help='Step size for the animation frames')
+
+    return parser.parse_args()
 
 class Traffic:
     """ Traffic simulation class based off of the Intelligent Driver Model (IDM).
@@ -40,8 +55,7 @@ class Traffic:
         Returns:
             float: The calculated dynamic distance
         """
-        dyndist = self.min_gap + velcurr*self.safe_time + \
-                    (velcurr*(velcurr - velnext)/(2*np.sqrt(self.accelconst*self.decel)))
+        dyndist = self.min_gap + max(0, velcurr*self.safe_time + velcurr*(velcurr - velnext)/(2*np.sqrt(self.accelconst*self.decel)))
         return dyndist
 
     def _bumpergap(self, posnext : float, poscurr : float, count : int) -> float:
@@ -59,10 +73,7 @@ class Traffic:
         else:
             gaparr = posnext - poscurr - self.veh_len
         
-        # Checks if the calculated bumper gap is 0
-        # if so adds the randomizer modifier to it
-        if np.round(gaparr,3) == 0:
-            gaparr += self._randmod
+        gaparr = max(gaparr, 1e-3)
         return gaparr
 
     def singlecar(self, pos_init : float, vel_init : float, time_limit = 900):
@@ -99,7 +110,7 @@ class Traffic:
         Tend = time_limit
 
         # Creates a linespace array from Tstart (0) to Tend
-        T = np.linspace(Tstart, Tend, Tend)
+        T = np.linspace(Tstart, Tend, int(Tend) + 1)
 
         # Calls and runs scipy.odeint on singlecalcs() with init_cond
         # for initial conditions and T for the time array
@@ -127,6 +138,9 @@ class Traffic:
             time_limit (int, optional): The upper time limit for the
                                         simulation in s. Defaults to 900.
         """
+        if car_count * (self.min_gap + self.veh_len) >= self.circ:
+            raise ValueError("The number of cars is too high for the given circumference!")
+        
         # Sets the initial position of every car to either a linear range of numbers
         # or an array of random numbers with the min_gap distance and vehicle length
         # added as well.
@@ -134,11 +148,10 @@ class Traffic:
             case 'e' | 'even': 
                 pos_init = np.arange(car_count, 0, -1) * (self.min_gap + self.veh_len)
             case 'r' | 'random' | 'rand':
-                pos_init = np.empty(car_count)
-                for i in range(car_count):
-                    pos_init[i] = np.round((np.random.randint(low=1, high=self.circ) + self.min_gap + self.veh_len), decimals=3)
-                    if pos_init[i] == pos_init[i-1]:
-                        pos_init[i] += np.random.randint(low=1, high=10)
+                spacing = self.min_gap + self.veh_len
+                pos_init = np.sort(np.random.choice(np.arange(0, self.circ - spacing + 1, spacing), size=car_count, replace=False))[::-1].astype(float)
+            case _:
+                raise ValueError("Unknown pos_type! Please rerun program!")
         
         # Sets the initial velocity of every car to either an array of zeros
         # or to an array of random numbers
@@ -147,6 +160,8 @@ class Traffic:
                 vel_init = np.zeros(car_count)
             case 'r' | 'random' | 'rand':
                 vel_init = np.random.randint(low=10, high=30, size=car_count)
+            case _:
+                raise ValueError("Unknown vel_type! Please rerun program!")
         
         # Dictionary to be used in the generation of the animation gifs
         self._graph_dict = dict.fromkeys(['r', 'rand', 'random'], 'Random')
@@ -160,28 +175,16 @@ class Traffic:
             vel = datarr[car_count:]
             
             dv = np.zeros(car_count)
+            dx = vel
             
             for i in range(car_count):
-                if i == 0:
-                    # Calculates the decel parameter for the first car
-                    decelparam = self._dyndistance(velcurr=vel[i], velnext=vel[i-1])\
-                                /self._bumpergap(poscurr=pos[i], posnext=pos[-1], count = i)
-                else:
-                    # Calculates the decel parameters for every other car
-                    decelparam = self._dyndistance(velcurr=vel[i], velnext=vel[i-1])\
-                                /self._bumpergap(poscurr=pos[i], posnext=pos[i-1], count = i)
-                    
-                    ### Something about this calculation is causing issues with any circumference
-                    # other than 1000m. At 100m the first car completely bypasses the last car at
-                    # least twice. From at least 200m - at least 900m the first car never even
-                    # reaches the last car. And at any circumference above 1000m the same byypassing
-                    # behavior can be observed. I'm not sure how to fix this, or if it's just a
-                    ### consequence of the IDM setup.
-                
-                dx = vel
+                decelparam = self._dyndistance(velcurr=vel[i], velnext=vel[i-1])\
+                            /self._bumpergap(poscurr=pos[i], posnext=pos[i-1], count = i)
                 
                 # Calculates the velocity derivative for every car
                 dv[i] = self.accelconst*(1 - (vel[i]/self.vel_0)**self.delta - (decelparam)**2)
+                if dv[i] < 0:
+                    dv[i] *= min(max(vel[i], 0) / 0.1, 1)
                 
             rate = np.concatenate((dx, dv))
             
@@ -195,11 +198,13 @@ class Traffic:
         Tend = time_limit
 
         # Creates a linespace array from Tstart (0) to Tend
-        time = np.linspace(Tstart, Tend, Tend)
+        time = np.linspace(Tstart, Tend, int(Tend) + 1)
         
         # Calls and runs scipy.odeint() on singlecalcs() with init_cond
         # for initial conditions and T for the time array
-        car_pos = odeint(multicalcs, init_cond, time)
+        car_pos, info = odeint(multicalcs, init_cond, time, full_output=True)
+        if info['message'] != 'Integration successful.':
+            raise RuntimeError(f"Simulation failed: {info['message']}")
 
         # Sets the rcParams for the animation figures that will be generated
         plt.rcParams['animation.html'] = "jshtml"
@@ -239,34 +244,49 @@ class Traffic:
         
         # Generates and saves a graph as a gif. Graph depends on the
         # value passed into graph_type
-        dir_path = pathlib.Path().resolve()
+        match graph_type:
+            case 0:
+                anim_func, prefix = CircleAnim, 'Circle'
+            case 1:
+                anim_func, prefix = AnimPlot, 'Flat'
+            case _:
+                raise ValueError("Unknown graph_type! Use 0 (circle) or 1 (flat).")
+
+        animation = anim.FuncAnimation(fig, anim_func, frames=frames_count, interval=1000/fps)
+
         match output.lower():
             case 'p' | 'plot':
                 plt.show()
             case 'g' | 'gif':
-                match graph_type:
-                    case 0:
-                        animation = anim.FuncAnimation(fig, CircleAnim, frames = frames_count)
-                        circ_gif_name = (f'Circle{self.circ}Circu{self._graph_dict[pos_type.lower()]}'
-                                        +f'Pos{self._graph_dict[vel_type.lower()]}Vel.gif')
-                        writer = anim.PillowWriter(fps = fps, bitrate = 1000)
-                        animation.save(circ_gif_name, writer=writer)
-                        print(circ_gif_name, "saved to", dir_path)
-                        plt.show()
-                    case 1:
-                        animation = anim.FuncAnimation(fig, AnimPlot, frames = frames_count)
-                        flat_gif_name = (f'Flat{self.circ}Circu{self._graph_dict[pos_type.lower()]}'
-                                        +f'Pos{self._graph_dict[vel_type.lower()]}Vel.gif')
-                        writer = anim.PillowWriter(fps = fps, bitrate = 1000)
-                        animation.save(flat_gif_name, writer=writer)
-                        print(flat_gif_name, "saved to", dir_path)
-                        plt.show()                 
+                gif_name = (f'{prefix}{self.circ}Circu{self._graph_dict[pos_type.lower()]}'
+                            f'Pos{self._graph_dict[vel_type.lower()]}Vel.gif')
+                animation.save(gif_name, writer=anim.PillowWriter(fps=fps))
+                print(gif_name, "saved to", pathlib.Path().resolve())
             case _:
-                print("Unknown output type! Please rerun program!")
+                raise ValueError("Unknown output type! Use 'plot' or 'gif'.")
+
+def main(args=None):
+    if args is None:
+        args = get_args()
+
+    traffic_simulation = Traffic()
+    traffic_simulation.multicar(
+        car_count=args.car_count,
+        graph_type=args.graph_type,
+        pos_type=args.pos_type,
+        vel_type=args.vel_type,
+        output=args.output,
+        frames_count=args.frames_count,
+        time_limit=args.time_limit,
+        fps=args.fps,
+        step=args.step
+    )
 
 if __name__ == "__main__":
-    test = Traffic()
-    test.circ = 800
-    test.multicar(car_count=30, graph_type=0, pos_type='e', vel_type='0',
-                  output='gif', frames_count = 180, fps = 10, step = 5)
+    main()
+    
+    # test = Traffic()
+    # test.circ = 800
+    # test.multicar(car_count=30, graph_type=0, pos_type='e', vel_type='0',
+    #               output='gif', frames_count = 180, fps = 10, step = 5)
     # test.singlecar(pos_init=0, vel_init=30, time_limit=150)
